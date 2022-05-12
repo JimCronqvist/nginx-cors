@@ -1,0 +1,54 @@
+access_log off;
+
+map $time_iso8601 $timestamp {
+    ~^(\d+-\d+-\d+)T(\d+:\d+:\d+)(\+[0-9:]+) '$1 $2';
+}
+
+log_format upstream_time '[$timestamp] '
+						 '$proxy_host:$proxy_port -> "$request" $status '
+#	                     '| rt=$request_time uct="$upstream_connect_time" uht="$upstream_header_time" urt="$upstream_response_time"'
+						 '';
+
+server{
+    listen 80;
+    server_name localhost;
+    
+	access_log  /var/log/nginx/access.log  upstream_time;
+	
+	
+    location / {
+        proxy_pass ${UPSTREAM};
+        client_max_body_size                  1G;
+        proxy_set_header Host                 $proxy_host;
+        proxy_set_header X-Real-IP            $remote_addr;
+        proxy_set_header X-Forwarded-For      $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto    $scheme; 
+        proxy_buffering off;
+        proxy_buffer_size 16k;
+        proxy_busy_buffers_size 24k;
+        proxy_buffers 64 4k;
+		proxy_ssl_server_name on;
+
+
+        if ($request_method = 'OPTIONS') {
+            add_header 'Access-Control-Allow-Origin' '*';
+            add_header 'Access-Control-Allow-Methods' 'GET, PUT, POST, OPTIONS, PROPFIND, MKCOL, DELETE';
+            add_header 'Access-Control-Allow-Headers' 'Authorization,Origin,Content-Type,Accept,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Range,Range,Depth';
+            add_header 'Access-Control-Allow-Credentials' true;
+            # Tell client that this pre-flight info is valid for 20 days
+            add_header 'Access-Control-Max-Age' 1728000;
+            add_header 'Content-Type' 'text/plain charset=UTF-8';
+            add_header 'Content-Length' 0;
+            return 204;
+        }
+
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, PUT, POST, OPTIONS, PROPFIND, MKCOL, DELETE' always;
+        add_header 'Access-Control-Allow-Headers' 'Authorization,Origin,Content-Type,Accept,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Range,Range,Depth' always;
+        add_header 'Access-Control-Allow-Credentials' true always;
+        add_header 'Access-Control-Expose-Headers' 'Authorization,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Content-Range,Range,Depth' always;
+		
+        # Add a custom header to easily see what request has been proxied through here
+        add_header 'X-Cors' 'Yes' always;
+    }
+}
